@@ -97,7 +97,7 @@
 ### 认证厨师
 
 - Request
-  `POST /cook`
+  `POST /cooks`
 
   ```json
   {
@@ -111,15 +111,74 @@
     "identify_card1": "身份证正面", // 上传文件后返回的相对路径
     "identify_card2": "身份证反面", // 上传文件后返回的相对路径
     "residence_permit": "居住证", // 上传文件后返回的相对路径
+    "description": "履历信息", // 可选，默认为空
     "foods": "[{'pic':'1.png'},{'pic':'2.png'}]" // 可选，厨师擅长的食物列表，组装成json数组，如果没有，传 null
+  }
+  ```
+
+- Response
+  ```json
+  {
+    "code": 0,
+    "msg": "success",
+    "data": null
   }
   ```
 
 ### 厨师列表（分页）
 
+- Request  
+  `GET /cooks`
+
+- Response
+  ```json
+  {
+    "code": 0,
+    "msg": "success",
+    "data": [
+      // 包含多个厨师信息
+      {
+        "name": "姓名",
+        "sex": 1,
+        "photo": "1.jpg",
+        "description": "四川xxx酒店大厨",
+        "foods": "[{'pic':'1.png'},{'pic':'2.png'}]"
+      }
+    ]
+  }
+  ```
+
 ### 删除厨师信息
 
+- Request  
+  `DELETE /cooks/:id`
+
+- Response
+  ```json
+  {
+    "code": 0,
+    "msg": "success",
+    "data": null
+  }
+  ```
+
 ### 编辑空闲时间
+
+- Request
+  `POST /cooks/:id/spare_time` // 编辑 id 所指定的厨师空闲时间
+  ```json
+  [
+    // 可以包含多段时间，时间使用 24 小时制
+    {
+      "start_time": "8:20", // 时间格式只能是 时:分
+      "end_time": "12:30"
+    },
+    {
+      "start_time": "13:20",
+      "end_time": "15:30"
+    }
+  ]
+  ```
 
 ## 菜单
 
@@ -146,3 +205,7 @@
     支持同时修改多个，通过逗号分隔订单编号
 
 ### 删除订单
+
+```
+
+```

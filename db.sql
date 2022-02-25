@@ -25,6 +25,7 @@ create table chefs(
     identify_card1 varchar(200) not null comment "身份证正面",
     identify_card2 varchar(200) not null comment "身份证反面",
     residence_permit varchar(200) null default "" comment "居住证",
+    description varchar(255) null default "" comment "履历，描述",
     foods varchar(500) null default "" comment "食物列表，json数组,例如： [{'pic':'1.png'},{'pic':'2.png'}]",
     created_at timestamp default CURRENT_TIMESTAMP() comment "添加时间",
     foreign key(user_id) references users(id)
