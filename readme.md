@@ -92,9 +92,56 @@
 }
 ```
 
-- **请求需要认证的接口，通过 bearer 方式把 token 带在头信息中即可**
+- **请求需要认证的接口，通过 bearer 认证方式把 token 带在头信息中即可**
 
-### 认证厨师
+### 个人信息
+
+- Request
+  `GET /users/me`
+
+- Response
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "phone": "13788883545",
+    "is_auth": true, // 是否是认证厨师
+    "pic": "1.jpg" // 头像相对地址
+    "address": "地址",
+    "is_cook": true, // 是否是厨师
+  }
+}
+```
+
+### 用户列表
+
+- Request  
+  `GET /users`
+
+- Response
+  ```json
+  {
+    "code": 0,
+    "msg": "success",
+    "data": [
+      // 包含多个用户信息
+      {
+        "id": 1,
+        "nickname": "姓名",
+        "phone": "13788883545",
+        "is_admin": false, // 是否是管理员
+        "is_auth": true, // 是否认证厨师
+        "pic": "1.jpg" // 头像相对地址
+        "address": "地址",
+        "is_cook": true, // 是否是厨师
+      }
+    ]
+  }
+  ```
+
+### 添加厨师（小程序端认证厨师）
 
 - Request
   `POST /cooks`
@@ -125,7 +172,7 @@
   }
   ```
 
-### 厨师列表（分页）
+### 厨师列表
 
 - Request  
   `GET /cooks`
@@ -138,6 +185,8 @@
     "data": [
       // 包含多个厨师信息
       {
+        "id": 1, // 厨师信息编号
+        "user_id": 2, // 用户编号
         "name": "姓名",
         "sex": 1,
         "photo": "1.jpg",
@@ -162,10 +211,11 @@
   }
   ```
 
-### 编辑空闲时间
+### 编辑(添加)空闲时间
 
 - Request
   `POST /cooks/:id/spare_time` // 编辑 id 所指定的厨师空闲时间
+
   ```json
   [
     // 可以包含多段时间，时间使用 24 小时制
@@ -180,21 +230,180 @@
   ]
   ```
 
+- Response
+  ```json
+  {
+    "code": 0,
+    "msg": "success",
+    "data": null
+  }
+  ```
+
+#### 查看指定时间空闲的厨师
+
+- Request  
+  `GET /cooks/spare_time?time=11:12`
+
+- Response
+  ```json
+  {
+    "code": 0,
+    "msg": "success",
+    "data": [
+      // 包含多个厨师信息
+      {
+        "id": 1, // 厨师信息编号
+        "user_id": 2, // 用户编号
+        "name": "姓名",
+        "sex": 1,
+        "photo": "1.jpg",
+        "description": "四川xxx酒店大厨",
+        "foods": "[{'pic':'1.png'},{'pic':'2.png'}]",
+        "spare_times": [
+          // 一个或多个时间段
+          {
+            "start_time": 100, // 从0点开始所经过的分钟数
+            "end_time": 200 // 从0点开始所经过的分钟数
+          }
+        ]
+      }
+    ]
+  }
+  ```
+
 ## 菜单
 
-### 添加菜品
+### 添加套餐
 
-### 菜单列表（分页）
+- Request
+  `POST /menus`
 
-### 编辑菜品
+```json
+{
+  "name": "套餐名",
+  "pic": "图片",
+  "price": 300, // 价格，单位：角
+  "description": "套餐详情页",
+  "rank": 0 // 套餐排序，越大越靠前
+}
+```
 
-### 删除菜品
+- Response
+  ```json
+  {
+    "code": 0,
+    "msg": "success",
+    "data": 1 // 返回添加后的套餐编号
+  }
+  ```
+
+### 套餐列表
+
+- Request  
+  `GET /menus`
+
+- Response
+  ```json
+  {
+    "code": 0,
+    "msg": "success",
+    "data": [
+      // 包含多个菜单信息
+      {
+        "id": 1, // 套餐编号
+        "name": "套餐名",
+        "pic": "图片",
+        "price": 300, // 价格，单位：角
+        "rank": 0
+      }
+    ]
+  }
+  ```
+
+### 编辑套餐
+
+- Request
+  `POST /menus/:id`
+
+```json
+{
+  "name": "套餐名",
+  "pic": "图片",
+  "price": 300, // 价格，单位：角
+  "description": "套餐详情",
+  "rank": 1 // 优先级，越大越靠前
+}
+```
+
+- Response
+  ```json
+  {
+    "code": 0,
+    "msg": "success",
+    "data": 1 // 编辑的套餐编号
+  }
+  ```
+
+### 删除套餐
+
+- Request
+  `DELETE /menus/:id`
+
+- Response
+  ```json
+  {
+    "code": 0,
+    "msg": "success",
+    "data": null
+  }
+  ```
 
 ## 订单
 
 ### 添加订单
 
-### 订单分类列表（分页）
+- Request
+  `POST /orders`
+
+```json
+{
+  "menu_id": 1, // 套餐编号
+  "address": "地址",
+  "phone": "手机号"
+}
+```
+
+- Response
+  ```json
+  {
+    "code": 0,
+    "msg": "success",
+    "data": 1 // 返回订单id
+  }
+  ```
+
+### 订单分类列表
+
+- Request  
+  `GET /orders`
+
+- Response
+  ```json
+  {
+    "code": 0,
+    "msg": "success",
+    "data": [
+      // 包含多个菜单信息
+      {
+        "id": 1, // 订单编号
+        "name": "套餐名",
+        "pic": "图片",
+        "price": 300, // 价格，单位：角
+        "rank": 0
+      }
+    ]
+  }
+  ```
 
 ### 编辑订单
 
@@ -204,8 +413,34 @@
 
     支持同时修改多个，通过逗号分隔订单编号
 
+- Request
+  `POST /orders/:id/status
+
+  ```json
+  {
+    "status": 1 //可以是上面的任意状态
+  }
+  ```
+
+- Response
+  ```json
+  {
+    "code": 0,
+    "msg": "success",
+    "data": 1 // 返回订单id
+  }
+  ```
+
 ### 删除订单
 
-```
+- Request
+  `DELETE /orders/:id
 
-```
+- Response
+  ```json
+  {
+    "code": 0,
+    "msg": "success",
+    "data": null
+  }
+  ```

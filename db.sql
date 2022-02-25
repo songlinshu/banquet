@@ -1,6 +1,7 @@
 create table users(
     id int auto_increment primary key,
     phone varchar(20) not null comment "手机号",
+    nickname varchar(20) null default '' comment "昵称",
     is_auth tinyint null default 0 comment "是否认证为厨师",
     is_admin tinyint null default 0 comment "是否是管理员",
     `password` varchar(100) null default '' comment "是否密码登录，如果为空不允许密码登录",
@@ -38,13 +39,13 @@ create table spare_times(
     end_time int not null comment "有空结束的时间，存储方式为0点开始所经历的分钟数",
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8 AUTO_INCREMENT = 1;
 
-# 菜品
+# 套餐
 create table menus(
     id int auto_increment primary key,
-    name varchar(50) not null comment "菜名",
-    pic varchar(200) not null comment "菜的照片",
-    price int not null comment "菜的价格，单位:角",
-    description varchar(500) null default '' comment "描述信息",
+    name varchar(50) not null comment "套餐名称",
+    pic varchar(200) not null comment "套餐封面",
+    price int not null comment "套餐价格，单位:角",
+    description text not null comment "详情页信息",
     rank int null default 0 comment "优先级,默认为0，越大越靠前",
     created_at timestamp default CURRENT_TIMESTAMP() comment "添加时间"
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8 AUTO_INCREMENT = 1;
@@ -53,8 +54,13 @@ create table menus(
 create table orders(
     id int auto_increment primary key,
     menu_id int not null comment "菜品编号",
+    name varchar(100) not null comment "套餐名称",
+    price int not null comment "套餐价格，单位:角",
+    pic varchar(200) not null comment "套餐封面",
     count int null default 1 comment "份数默认1",
-    status tinyint null default 0 comment "订单状态，-1， 已取消，0 等待下单相当于在购物车，1 已下单，2 已接单，10 已完成",
+    status tinyint null default 0 comment "订单状态，-1， 已取消，0 已下单，1 已接单，10 已完成",
+    address varchar(255) not null comment "地址",
+    phone varcahr(20) not null comment "电话",
     created_at timestamp default CURRENT_TIMESTAMP() comment "添加时间",
     foreign key(menu_id) references menus(id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8 AUTO_INCREMENT = 1;
