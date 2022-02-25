@@ -54,8 +54,6 @@
 - Request
   `POST /login/phone/code`
 
-  - body
-
   ```json
   {
     "phone": "13788888888"
@@ -76,6 +74,12 @@
 
 - Request
   `POST /login/phone`
+
+  ```json
+  {
+    "phone": "13788888888"
+  }
+  ```
 
 - Response
 
