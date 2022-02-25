@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, env::var};
 
 use crate::{
-    jwt::{AuthError, Claims, KEYS, create_token},
+    jwt::{create_token, AuthError, Claims, KEYS},
     res::Res,
 };
 
@@ -86,71 +86,10 @@ pub struct QrLoginResult {
     scene: String,
 }
 
-pub async fn wx_login_qrcode_result(
-    Path(id): Path<String>,
-    Extension(client): Extension<Client>,
-) -> Res<String> {
+pub async fn phone_login(Extension(client): Extension<Client>) -> Res<String> {
     let mut res = Res::default();
 
-    let mut conn = match client.get_connection() {
-        Ok(v) => v,
-        Err(e) => {
-            res.set_code(10001).set_msg(e.to_string().as_str());
-            return res;
-        }
-    };
-
-    // 获取扫码结果
-    let result: bool = match conn.get(id.as_str()) {
-        Ok(v) => v,
-        Err(e) => {
-            res.set_code(10001).set_msg(e.to_string().as_str());
-            return res;
-        }
-    };
-
-    // 登录成功后，删除redis中的记录
-    if result {
-        let _: () = conn.del(id).unwrap();
-    } else {
-        // 失败直接返回
-        res.set_code(10001).set_msg("等待扫描");
-        return res;
-    }
-
-    // 获取token
-    let token: String = match conn.get("token") {
-        Ok(v) => v,
-        Err(e) => {
-            res.set_code(10001).set_msg(e.to_string().as_str());
-            return res;
-        }
-    };
-
-    // 获取用户基本信息
-    // https://api.weixin.qq.com/cgi-bin/user/info?access_token=ACCESS_TOKEN&openid=OPENID&lang=zh_CN
-
-    let url = format!(
-        "https://api.weixin.qq.com/cgi-bin/user/info?access_token={}&openid={}&lang=zh_CN",
-        token, "ojEGLjhoU4DcgeJ6WcQCGepCeQ98"
-    );
-    let resp = match reqwest::get(url).await {
-        Ok(v) => v,
-        Err(e) => {
-            res.set_code(10000).set_msg(e.to_string().as_str());
-            return res;
-        }
-    };
-    // let info = match resp.json::<HashMap<String, String>>().await {
-    //     Ok(v) => v,
-    //     Err(e) => {
-    //         res.set_code(10001).set_msg(e.to_string().as_str());
-    //         return res;
-    //     }
-    // };
-
-    debug!("userinfo:{:?}", resp.text().await.unwrap());
-
+    log::info!("登录");
     let token = create_token("aaa").unwrap();
 
     res.set_data(token);
