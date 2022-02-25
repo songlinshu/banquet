@@ -64,3 +64,18 @@ create table orders(
     created_at timestamp default CURRENT_TIMESTAMP() comment "添加时间",
     foreign key(menu_id) references menus(id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8 AUTO_INCREMENT = 1;
+
+# 预约
+create table reservations(
+    id int auto_increment primary key,
+    user_id int null comment "用户编号,可选",
+    phone varcahr(20) not null comment "电话",
+    name varcahr(20) null comment "姓名",
+    address varchar(20) null default "" comment "就餐地址",
+    datetime timestamp null default null comment "用餐日期",
+    number_of_people int null default 0 comment "就餐人数",
+    status tinyint null default 0 comment "预约状态，0 未处理，已处理",
+    msg varchar(255) null default "" comment "处理记录",
+    created_at timestamp default CURRENT_TIMESTAMP() comment "添加时间",
+    foreign key(user_id) references menus(id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8 AUTO_INCREMENT = 1;
