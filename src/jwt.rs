@@ -40,8 +40,8 @@ pub async fn authorize(Json(payload): Json<AuthPayload>) -> Result<Json<AuthBody
 
     let dt = Local::now();
     let exp = dt.timestamp();
-    // 7天后token失效
-    let exp = (exp + 60 * 60 * 24 * 7) as usize;
+    // 30天后token失效
+    let exp = (exp + 60 * 60 * 24 * 30) as usize;
 
     debug!("exp:{}", exp);
 
@@ -168,8 +168,8 @@ pub enum AuthError {
 pub fn create_token(sub:&str)->Result<String,String>{
     let dt = Local::now();
     let exp = dt.timestamp();
-    // 7天后token失效
-    let exp = (exp + 60 * 60 * 24 * 7) as usize;
+    // 30天后token失效
+    let exp = (exp + 60 * 60 * 24 * 30) as usize;
 
     let claims = Claims {
         sub: sub.to_owned(),

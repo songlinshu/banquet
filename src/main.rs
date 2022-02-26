@@ -4,7 +4,7 @@ mod res;
 mod utils;
 
 use axum::{
-    routing::{get, post},
+    routing::{delete, get, post},
     AddExtensionLayer, Router,
 };
 use dotenv::dotenv;
@@ -14,8 +14,14 @@ use std::env::var;
 use std::net::SocketAddr;
 use tower_http::cors::{any, CorsLayer};
 
-use crate::api::user::{get_phone_code, me};
-use crate::api::user::{get_users, phone_login};
+use crate::api::{
+    cook::create_cook,
+    user::{get_phone_code, me}, menus::create_menu,
+};
+use crate::api::{
+    cook::{delete_cook, list_cooks, set_spare_time},
+    user::{get_users, phone_login},
+};
 
 #[tokio::main]
 async fn main() {
@@ -42,8 +48,18 @@ async fn main() {
         .route("/", get(get_users))
         .route("/me", get(me));
 
+    let menu = Router::new().route("/", post(create_menu));
+
+    let cook = Router::new()
+        .route("/", post(create_cook))
+        .route("/", get(list_cooks))
+        .route("/:id", delete(delete_cook))
+        .route("/:id/spare_time", post(set_spare_time));
+
     let api = Router::new()
-        .nest("/users", user)
+        .nest("/users", user) // 用户相关接口
+        .nest("/cooks", cook) // 厨师相关接口
+        .nest("/menus", menu) // 菜单相关接口
         .route("/login/phone/code", post(get_phone_code))
         .route("/login/phone", post(phone_login))
         .route("/upload", post(api::upload::upload_file));
