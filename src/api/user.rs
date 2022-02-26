@@ -1,10 +1,14 @@
-use axum::extract::{Extension, Path};
+use axum::{
+    extract::{Extension, Path},
+    Json,
+};
 use chrono::Local;
 use jsonwebtoken::{encode, Header};
 use log::{debug, info};
 use redis::{Client, Commands};
 use reqwest;
 use serde::{Deserialize, Serialize};
+use sqlx::{MySql, Pool};
 use std::{collections::HashMap, env::var};
 
 use crate::{
@@ -12,171 +16,214 @@ use crate::{
     res::Res,
 };
 
-#[derive(Debug, Serialize, Deserialize)]
-struct TokenRes {
-    access_token: String,
-    expires_in: i32,
-}
-
-pub async fn refresh_token(client: Client) -> Res {
-    let url = format!(
-        "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={}&secret={}",
-        var("MP_APPID").expect("获取 MP_APPID 错误"),
-        var("MP_SECRET").expect("获取 MP_SECRET 错误"),
-    );
-
-    debug!("请求地址:{}", url);
-
-    let res = match reqwest::get(url).await {
-        Ok(v) => v,
-        Err(e) => {
-            let mut res = Res::default();
-            res.set_code(10000).set_msg(e.to_string().as_str());
-            return res;
-        }
-    };
-    let data = match res.json::<TokenRes>().await {
-        Ok(v) => v,
-        Err(e) => {
-            let mut res = Res::default();
-            res.set_code(10001).set_msg(e.to_string().as_str());
-            return res;
-        }
-    };
-
-    let mut conn = match client.get_connection() {
-        Ok(v) => v,
-        Err(e) => {
-            let mut res = Res::default();
-            res.set_code(10002).set_msg(e.to_string().as_str());
-            return res;
-        }
-    };
-
-    let _: () = match conn.set_ex("token", &data.access_token, data.expires_in as usize) {
-        Ok(v) => v,
-        Err(e) => {
-            let mut res = Res::default();
-            res.set_code(10003).set_msg(e.to_string().as_str());
-            return res;
-        }
-    };
-
-    return Res::default();
-}
-
-/// 创建临时二维码返回的信息
 #[derive(Deserialize, Serialize, Debug, Default)]
-struct QrCode {
-    // 根据ticket可以获取到未失效的二维码
-    ticket: String,
-    // 过期时间
-    expire_seconds: i32,
-    // 根据这个url生成二维码
-    url: String,
+pub struct PhoneLogin {
+    phone: String,
+    code: String,
 }
 
-#[derive(Deserialize, Serialize, Debug, Default)]
-pub struct QrLoginResult {
-    // 过期时间
-    expire_seconds: i32,
-    // 根据这个url生成二维码
-    url: String,
-    // 登录状态场景码，用于返回给客户端查询扫码状态
-    scene: String,
-}
-
-pub async fn phone_login(Extension(client): Extension<Client>) -> Res<String> {
+pub async fn phone_login(
+    login: Json<PhoneLogin>,
+    Extension(mut client): Extension<Client>,
+    Extension(pool): Extension<Pool<MySql>>,
+) -> Res<String> {
     let mut res = Res::default();
 
-    log::info!("登录");
-    let token = create_token("aaa").unwrap();
+    if login.phone.is_empty() || login.code.is_empty() {
+        res.set_code(-1);
+        res.set_msg("手机号和验证码不能为空");
+        return res;
+    }
+
+    // 获取验证码
+    let code: String = match client.get(format!("{}_login", &login.phone)) {
+        Ok(v) => v,
+        Err(e) => {
+            log::warn!("获取验证码失败，可能是超时了:{},手机号:{}", e, &login.phone);
+            res.set_code(-2);
+            res.set_msg("验证码超时，请重新获取");
+            return res;
+        }
+    };
+
+    // 比较验证码是否正确
+    if !code.eq(&login.code) {
+        log::debug!("验证码错误，手机号:{}", &login.phone);
+        res.set_code(-3);
+        res.set_msg("验证码错误");
+        return res;
+    }
+
+    // 用户编号，用于生成 token
+    let id;
+    // 如果数据库用户表不存在该手机号，就添加
+    match sqlx::query!("SELECT * FROM users WHERE phone = ?", &login.phone)
+        .fetch_one(&pool)
+        .await
+    {
+        Ok(v) => {
+            // 查询到的用户编号
+            id = v.id as u64;
+        }
+        Err(e) => {
+            match e {
+                sqlx::Error::RowNotFound => {
+                    // 添加手机到数据库
+                    match sqlx::query!("insert into users(phone) values(?)", &login.phone)
+                        .execute(&pool)
+                        .await
+                    {
+                        Ok(v) => {
+                            // 插入后的用户编号
+                            id = v.last_insert_id()
+                        }
+                        Err(e) => {
+                            log::error!("添加用户到数据库出错:{}", e);
+                            res.set_code(-5);
+                            res.set_msg("服务端出错，请联系管理");
+                            return res;
+                        }
+                    };
+                }
+                _ => {
+                    log::error!("查询数据库出错:{:#?}", e);
+                    res.set_code(-6);
+                    res.set_msg("服务端出错，请联系管理");
+                    return res;
+                }
+            }
+        }
+    };
+
+    // 创建token
+    let token = create_token(id.to_string().as_str()).unwrap();
+
+    // 删除redis中的验证码
+    client
+        .del::<String, ()>(format!("{}_login", &login.phone))
+        .unwrap();
 
     res.set_data(token);
     return res;
 }
 
-/// 生成关注登录的临时二维码
-pub async fn create_wx_login_qrcode(Extension(client): Extension<Client>) -> Res<QrLoginResult> {
-    // 生成临时登录场景字符串
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Phone {
+    phone: String,
+}
 
-    let id: usize = rand::random::<usize>() + 10000;
-
-    let mut scene = format!("wx_login_{}", id);
-
-    info!("scene:{}", scene);
+/// 获取手机验证码
+pub async fn get_phone_code(phone: Json<Phone>, Extension(mut client): Extension<Client>) -> Res {
+    log::debug!("{:#?}", phone);
 
     let mut res = Res::default();
 
-    let mut conn = match client.get_connection() {
-        Ok(v) => v,
-        Err(e) => {
-            res.set_code(10001).set_msg(e.to_string().as_str());
-            return res;
-        }
-    };
-
-    // 防止重复的场景码，如果存在了，就在末尾追加一个字符
-    let ret: bool = match conn.exists(&scene) {
-        Ok(v) => v,
-        Err(e) => {
-            res.set_code(10001).set_msg(e.to_string().as_str());
-            return res;
-        }
-    };
-    if ret {
-        scene += "x";
+    // 如果 redis 中已存在验证码，就不能重发
+    if let Ok(_) = client.get::<String, String>(format!("{}_login", &phone.phone)) {
+        res.set_code(-2);
+        res.set_msg("验证码已发送，无需重新发送");
+        return res;
     }
 
-    // 保存scene,用于登录判断
-    let _: () = conn.set_ex(&scene, false, 300).unwrap();
+    // 生成随机验证码
+    let n: f32 = rand::random();
+    let code = format!("{:06?}", (n * 1000000f32) as u32);
 
-    // 获取token
-    let token: String = match conn.get("token") {
+    let _: () = match client.set_ex(format!("{}_login", &phone.phone), &code, 300) {
         Ok(v) => v,
         Err(e) => {
-            res.set_code(10001).set_msg(e.to_string().as_str());
+            log::error!("发送登录短信出错:{},手机号:{}", e, &phone.phone);
+            res.set_code(-1);
+            res.set_msg("短信验证码发送出错,请联系管理员");
             return res;
         }
     };
+    log::debug!("code:{}", code);
 
-    let qrcode = match gen_qrcode(&token, scene.as_str(), 60 * 5).await {
-        Ok(v) => v,
-        Err(e) => {
-            res.set_code(10001).set_msg(e.to_string().as_str());
-            return res;
-        }
-    };
+    // 发送短信验证码给用户手机
+    let id = var("ACCESS_KEY_ID").unwrap();
+    let secret = var("ACCESS_SECRET").unwrap();
+    let sms_sign_name = var("SMS_SIGN_NAME").unwrap();
+    let sms_code = var("LOGIN_SMS_CODE").unwrap();
 
-    let qr_result = QrLoginResult {
-        expire_seconds: qrcode.expire_seconds,
-        url: qrcode.url,
-        scene: scene.to_string(),
-    };
-    res.set_data(qr_result);
-    return res;
+    // let aliyun = Aliyun::new(&id, &secret);
+    // if let Err(e) = aliyun
+    //     .send_sms(&phone.phone, &sms_sign_name, &sms_code, &code)
+    //     .await
+    // {
+    //     log::error!("发送登录短信出错:{},手机号:{}", e, &phone.phone);
+    //     res.set_code(-2);
+    //     res.set_msg("短信验证码发送出错,请联系管理员");
+    //     return res;
+    // }
+
+    res.set_data(code);
+    res
 }
 
-/// 生成带场景参数的临时二维码
-/// token: 请求微信接口必须的参数
-/// scene: 场景参数，用来区分不同的人
-/// timeout: 二维码过期时间，单位是秒
-async fn gen_qrcode(token: &str, scene: &str, timeout: usize) -> Result<QrCode, reqwest::Error> {
-    // 生成二维码
-    let url = format!(
-        "https://api.weixin.qq.com/cgi-bin/qrcode/create?access_token={}",
-        token
-    );
+/**
+*
+* "phone": "13788883545",
+   "is_auth": true, // 是否是认证厨师
+   "pic": "1.jpg" // 头像相对地址
+   "address": "地址",
+   "is_cook": true, // 是否是厨师
 
-    let client = reqwest::Client::new();
-    let res = client.post(url)
-        .header("content-type", "application/json")
-        .body(
-            format!(r#"{{"expire_seconds": {}, "action_name": "QR_STR_SCENE", "action_info": {{"scene": {{"scene_str": "{}"}}}}}}"#,
-            timeout,
-            scene
-    ))
-        .send().await.unwrap();
+   */
 
-    return res.json::<QrCode>().await;
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct ResultMe {
+    id: i32,
+    phone: String,
+    is_auth: bool,
+    pic: Option<String>,
+    address: Option<String>,
+    is_cook: bool,
+    is_admin: bool,
+}
+/// 获取自己的信息
+pub async fn me(claims: Claims, Extension(pool): Extension<Pool<MySql>>) -> Res<ResultMe> {
+    let mut res = Res::<ResultMe>::default();
+
+    log::debug!("登录用户id:{}", &claims.sub);
+
+    let id: u64 = claims.sub.parse().unwrap();
+    match sqlx::query!("SELECT * FROM users WHERE id = ?", id)
+        .fetch_one(&pool)
+        .await
+    {
+        Ok(v) => {
+            log::debug!("{:#?}", v);
+            let me = ResultMe {
+                id: v.id,
+                phone: v.phone,
+                is_auth: if let Some(v) = v.is_auth {
+                    v == 1
+                } else {
+                    false
+                },
+                pic: v.pic,
+                address: v.address,
+                is_cook: if let Some(v) = v.is_cook {
+                    v == 1
+                } else {
+                    false
+                },
+                is_admin: if let Some(v) = v.is_admin {
+                    v == 1
+                } else {
+                    false
+                },
+            };
+            res.set_data(me);
+            return res;
+        }
+        Err(e) => {
+            log::error!("获取个人信息出错:{},id:{}", e, id);
+            res.set_code(-5);
+            res.set_msg("获取个人信息出错");
+            return res;
+        }
+    }
+    res
 }

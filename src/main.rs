@@ -15,6 +15,7 @@ use std::net::SocketAddr;
 use tower_http::cors::{any, CorsLayer};
 
 use crate::api::user::phone_login;
+use crate::api::user::{get_phone_code, me};
 
 #[tokio::main]
 async fn main() {
@@ -37,10 +38,11 @@ async fn main() {
         .await
         .unwrap();
 
-    let user = Router::new();
+    let user = Router::new().route("/me", get(me));
 
     let api = Router::new()
-        .nest("/user", user)
+        .nest("/users", user)
+        .route("/login/phone/code", post(get_phone_code))
         .route("/login/phone", post(phone_login))
         .route("/upload", post(api::upload::upload_file));
 
