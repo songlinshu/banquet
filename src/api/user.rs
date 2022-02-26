@@ -161,15 +161,6 @@ pub async fn get_phone_code(phone: Json<Phone>, Extension(mut client): Extension
     res
 }
 
-/**
-*
-* "phone": "13788883545",
-   "is_auth": true, // 是否是认证厨师
-   "pic": "1.jpg" // 头像相对地址
-   "address": "地址",
-   "is_cook": true, // 是否是厨师
-
-   */
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct ResultMe {
@@ -183,7 +174,7 @@ pub struct ResultMe {
 }
 /// 获取自己的信息
 pub async fn me(claims: Claims, Extension(pool): Extension<Pool<MySql>>) -> Res<ResultMe> {
-    let mut res = Res::<ResultMe>::default();
+    let mut res = Res::default();
 
     log::debug!("登录用户id:{}", &claims.sub);
 
@@ -225,5 +216,60 @@ pub async fn me(claims: Claims, Extension(pool): Extension<Pool<MySql>>) -> Res<
             return res;
         }
     }
+    res
+}
+
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct ListUser {
+    id: i32,
+    phone: String,
+    is_auth: bool,
+    pic: Option<String>,
+    address: Option<String>,
+    is_cook: bool,
+    is_admin: bool,
+}
+
+/// 用户列表
+pub async fn get_users(Extension(pool): Extension<Pool<MySql>>) -> Res<Vec<ListUser>> {
+    let mut res = Res::default();
+    let rs = match sqlx::query!("SELECT * FROM users").fetch_all(&pool).await {
+        Ok(v) => v,
+        Err(e) => {
+            log::error!("获取用户列表出错:{}", e);
+            res.set_code(-1);
+            res.set_msg("获取用户列表出错");
+            return res;
+        }
+    };
+
+    let mut users = vec![];
+    for v in rs {
+        users.push(ListUser {
+            id: v.id,
+            // 隐藏手机号
+            phone: format!("{}****{}", &v.phone[0..3], &v.phone[7..]),
+            is_auth: if let Some(v) = v.is_auth {
+                v == 1
+            } else {
+                false
+            },
+            pic: v.pic,
+            address: v.address,
+            is_cook: if let Some(v) = v.is_cook {
+                v == 1
+            } else {
+                false
+            },
+            is_admin: if let Some(v) = v.is_admin {
+                v == 1
+            } else {
+                false
+            },
+        });
+    }
+
+    res.set_data(users);
+
     res
 }

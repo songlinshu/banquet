@@ -14,8 +14,8 @@ use std::env::var;
 use std::net::SocketAddr;
 use tower_http::cors::{any, CorsLayer};
 
-use crate::api::user::phone_login;
 use crate::api::user::{get_phone_code, me};
+use crate::api::user::{get_users, phone_login};
 
 #[tokio::main]
 async fn main() {
@@ -38,7 +38,9 @@ async fn main() {
         .await
         .unwrap();
 
-    let user = Router::new().route("/me", get(me));
+    let user = Router::new()
+        .route("/", get(get_users))
+        .route("/me", get(me));
 
     let api = Router::new()
         .nest("/users", user)
